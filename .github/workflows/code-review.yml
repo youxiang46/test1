@@ -1,0 +1,68 @@
+name: 代码审核 (Code Review)
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-structure:
+    name: 仓库结构检查
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 基础结构检查
+        run: |
+          echo "当前仓库文件："
+          ls -la
+          test -f README.md || { echo "::error::缺少 README.md，每个仓库都应有说明文档"; exit 1; }
+          echo "结构检查通过"
+
+  secret-scan:
+    name: 密钥泄漏扫描
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 扫描本次变更
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+        run: python .github/scripts/secret_scan.py
+
+  review-summary:
+    name: 审核结论
+    runs-on: ubuntu-latest
+    needs: [repo-structure, secret-scan]
+    if: ${{ always() }}
+    steps:
+      - name: 汇总结果
+        run: |
+          echo "仓库结构: ${{ needs.repo-structure.result }}"
+          echo "密钥泄漏扫描: ${{ needs.secret-scan.result }}"
+          if [ "${{ needs.repo-structure.result }}" != "success" ] \
+            || [ "${{ needs.secret-scan.result }}" != "success" ]; then
+            echo "::error::代码审核未通过，请修复上面的问题"
+            exit 1
+          fi
+          echo "代码审核通过"

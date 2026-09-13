@@ -1,0 +1,7 @@
+# 默认审阅者：把下面改成你自己的 GitHub 用户名（去掉 @ 后面的占位）
+# 示例：* @your-username
+* @你的GitHub用户名
+
+# 如需给特定目录指定审阅人，参考：
+# /.github/    @你的GitHub用户名
+# /docs/       @你的GitHub用户名
